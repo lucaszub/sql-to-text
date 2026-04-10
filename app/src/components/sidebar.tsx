@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const mainNav = [
-  { href: "/dashboard",  label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/dashboard",  label: "Dashboard",   icon: LayoutDashboard },
   { href: "/explorer",   label: "Explorer",   icon: MessageSquare },
   { href: "/history",    label: "Historique", icon: History },
   { href: "/schema",     label: "Schéma DB",  icon: Database },
