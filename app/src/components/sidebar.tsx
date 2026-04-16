@@ -1,40 +1,43 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
-  LayoutDashboard,
-  MessageSquare,
-  History,
-  Database,
-  Settings,
-  Zap,
-  ChevronsUpDown,
-  HelpCircle,
-  CreditCard,
+  MessageSquare, History, Database, Zap, ChevronsUpDown, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getDashboards, createDashboard, type Dashboard } from "@/lib/dashboard-store";
 
-const mainNav = [
-  { href: "/dashboard",  label: "Dashboard",   icon: LayoutDashboard },
+const secondaryNav = [
   { href: "/explorer",   label: "Explorer",   icon: MessageSquare },
   { href: "/history",    label: "Historique", icon: History },
   { href: "/schema",     label: "Schéma DB",  icon: Database },
 ];
 
-const settingsNav = [
-  { href: "/settings",   label: "Settings",   icon: Settings },
-  { href: "/settings/payments", label: "Payment Gateways", icon: CreditCard },
-  { href: "/help",       label: "Help Center", icon: HelpCircle },
-];
-
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [dashboards, setDashboards] = useState<Dashboard[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
 
-  const isActive = (href: string) => {
-    if (href === "/explorer") return pathname === "/" || pathname.startsWith("/explorer");
-    return pathname === href;
-  };
+  useEffect(() => {
+    setDashboards(getDashboards());
+  }, [pathname, searchParams]);
+
+  const activeDashboardId = searchParams.get("d") ?? dashboards[0]?.id;
+  const isDashboardRoute = pathname === "/dashboard";
+
+  function handleCreate() {
+    if (!newName.trim()) return;
+    const d = createDashboard(newName.trim());
+    setDashboards(getDashboards());
+    setNewName("");
+    setCreating(false);
+    // Navigation gérée par l'utilisateur (il clique ensuite sur le dashboard)
+    window.location.href = `/dashboard?d=${d.id}`;
+  }
 
   return (
     <aside className="w-56 flex-shrink-0 flex flex-col bg-white border-r border-gray-200 min-h-screen">
@@ -62,40 +65,73 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Main nav */}
-      <nav className="flex-1 px-3 py-3 overflow-y-auto">
-        <p className="px-3 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Main</p>
-        <div className="space-y-0.5 mb-4">
-          {mainNav.map(({ href, label, icon: Icon }) => {
-            const active = isActive(href);
-            return (
-              <Link key={href} href={href}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                  active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                )}>
-                <Icon className={cn("w-4 h-4 shrink-0", active ? "text-blue-600" : "text-gray-400")} />
-                {label}
-              </Link>
-            );
-          })}
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
+
+        {/* Dashboards */}
+        <div>
+          <p className="px-3 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Dashboards</p>
+          <div className="space-y-0.5">
+            {dashboards.map(d => {
+              const active = isDashboardRoute && activeDashboardId === d.id;
+              return (
+                <Link
+                  key={d.id}
+                  href={`/dashboard?d=${d.id}`}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors",
+                    active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
+                  )}
+                >
+                  <span className="text-sm leading-none">{d.emoji}</span>
+                  <span className="truncate">{d.name}</span>
+                </Link>
+              );
+            })}
+
+            {/* Créer nouveau */}
+            {creating ? (
+              <div className="px-2 flex gap-1.5 mt-1">
+                <input
+                  autoFocus
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setCreating(false); }}
+                  placeholder="Nom…"
+                  className="flex-1 text-[11px] border border-gray-200 rounded-md px-2 py-1 outline-none focus:border-[#29B5E8]"
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setCreating(true)}
+                className="flex items-center gap-2 px-3 py-1.5 w-full rounded-lg text-xs text-gray-400 hover:text-[#29B5E8] hover:bg-blue-50 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> Nouveau
+              </button>
+            )}
+          </div>
         </div>
 
-        <p className="px-3 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Settings</p>
-        <div className="space-y-0.5">
-          {settingsNav.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href;
-            return (
-              <Link key={href} href={href}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                  active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                )}>
-                <Icon className={cn("w-4 h-4 shrink-0", active ? "text-blue-600" : "text-gray-400")} />
-                {label}
-              </Link>
-            );
-          })}
+        {/* Main nav */}
+        <div>
+          <p className="px-3 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Main</p>
+          <div className="space-y-0.5">
+            {secondaryNav.map(({ href, label, icon: Icon }) => {
+              const active = href === "/explorer"
+                ? pathname === "/" || pathname.startsWith("/explorer")
+                : pathname === href;
+              return (
+                <Link key={href} href={href}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors",
+                    active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
+                  )}>
+                  <Icon className={cn("w-4 h-4 shrink-0", active ? "text-blue-600" : "text-gray-400")} />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </nav>
 

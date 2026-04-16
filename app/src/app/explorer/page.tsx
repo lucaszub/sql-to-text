@@ -14,7 +14,11 @@ import { StatusBadge } from "@/components/status-badge";
 import { SQLWorksheet } from "@/components/sql-worksheet";
 import { SQLBlock } from "@/components/sql-block";
 import { saveHistory } from "@/lib/history-store";
+import { saveWidget } from "@/lib/widget-store";
+import { addWidgetToDashboard } from "@/lib/dashboard-store";
+import { ChartBuilder } from "@/components/chart-builder";
 import { cn } from "@/lib/utils";
+import type { DashboardWidget } from "@/lib/widget-store";
 
 interface Message {
   id: string;
@@ -97,7 +101,8 @@ function ExplorerContent() {
   const [input, setInput]             = useState(initialQuery);
   const [loading, setLoading]         = useState(false);
   const [activeResult, setActiveResult] = useState<QueryResult | null>(null);
-  const [activeTab, setActiveTab]     = useState<"table" | "sql">("table");
+  const [activeTab, setActiveTab]     = useState<"table" | "sql" | "chart">("table");
+  const [widgetToast, setWidgetToast] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [sortCol, setSortCol]         = useState<string | null>(null);
   const [sortDir, setSortDir]         = useState<"asc" | "desc">("asc");
@@ -262,6 +267,13 @@ function ExplorerContent() {
                         : "bg-transparent border-transparent text-gray-400 hover:text-gray-600")}>
                     <Table className="w-3 h-3" /> Table
                   </button>
+                  <button onClick={() => setActiveTab("chart")}
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border -ml-px transition-colors",
+                      activeTab === "chart"
+                        ? "bg-white border-gray-300 text-gray-800 shadow-sm"
+                        : "bg-transparent border-transparent text-gray-400 hover:text-gray-600")}>
+                    <BarChart2 className="w-3 h-3" /> Chart
+                  </button>
                   <button onClick={() => setActiveTab("sql")}
                     className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-r -ml-px transition-colors",
                       activeTab === "sql"
@@ -307,102 +319,124 @@ function ExplorerContent() {
                 </div>
               )}
 
-              {/* ── Table ── */}
-              <div className="flex-1 overflow-auto">
-                {activeTab === "table" ? (
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 z-10">
-                      <tr className="bg-[#F8F9FA] border-b border-gray-200">
-                        {/* Row number header */}
-                        <th className="w-10 px-2 py-2 text-right select-none border-r border-gray-200">
-                          <span className="text-[10px] text-gray-300 font-normal">#</span>
-                        </th>
-                        {activeResult.columns.map(col => (
-                          <th key={col} onClick={() => toggleSort(col)}
-                            className={cn("px-3 py-2 font-medium select-none cursor-pointer group",
-                              "hover:bg-gray-100 transition-colors whitespace-nowrap",
-                              isNumericCol(col, firstRow[col]) ? "text-right" : "text-left")}>
-                            <div className={cn("flex items-center gap-1.5",
-                              isNumericCol(col, firstRow[col]) ? "flex-row-reverse" : "flex-row")}>
-                              <ColIcon col={col} sample={firstRow[col]} />
-                              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
-                                {col.replace(/_/g, "_")}
-                              </span>
-                              <span className="opacity-0 group-hover:opacity-100 ml-auto">
-                                {sortCol === col
-                                  ? sortDir === "asc"
-                                    ? <ChevronUp className="w-3 h-3 text-[#29B5E8]" />
-                                    : <ChevronDown className="w-3 h-3 text-[#29B5E8]" />
-                                  : <ChevronUp className="w-3 h-3 text-gray-300" />}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageRows.map((row, i) => {
-                        const globalNum = (page - 1) * PER_PAGE + i + 1;
-                        return (
-                          <tr key={i} className="border-b border-gray-100 hover:bg-[#EEF6FB] transition-colors">
-                            {/* Row number */}
-                            <td className="px-2 py-1.5 text-right text-[10px] text-gray-300 font-mono border-r border-gray-100 select-none w-10">
-                              {globalNum}
-                            </td>
+              {/* ── Content ── */}
+              {activeTab === "chart" ? (
+                <div className="flex-1 overflow-hidden relative">
+                  {widgetToast && (
+                    <div className="absolute top-3 right-3 z-50 flex items-center gap-2 bg-emerald-600 text-white text-xs font-medium px-3 py-2 rounded-xl shadow-lg">
+                      Widget ajouté ✓ —{" "}
+                      <a href="/dashboard" className="underline underline-offset-2">
+                        Voir le dashboard
+                      </a>
+                    </div>
+                  )}
+                  <ChartBuilder
+                    result={activeResult}
+                    onAddToDashboard={(widget: Omit<DashboardWidget, "id" | "createdAt" | "order">, dashboardId: string) => {
+                      const saved = saveWidget(widget);
+                      addWidgetToDashboard(dashboardId, saved.id);
+                      setWidgetToast(true);
+                      setTimeout(() => setWidgetToast(false), 4000);
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="flex-1 overflow-auto">
+                    {activeTab === "table" ? (
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 z-10">
+                          <tr className="bg-[#F8F9FA] border-b border-gray-200">
+                            <th className="w-10 px-2 py-2 text-right select-none border-r border-gray-200">
+                              <span className="text-[10px] text-gray-300 font-normal">#</span>
+                            </th>
                             {activeResult.columns.map(col => (
-                              <td key={col} className={cn(
-                                "px-3 py-1.5 font-mono text-[11px] text-gray-800 whitespace-nowrap",
-                                isNumericCol(col, firstRow[col]) ? "text-right tabular-nums" : "text-left"
-                              )}>
-                                {(col === "customer_name" || col === "name") ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className={cn("inline-flex items-center justify-center w-5 h-5 rounded text-white text-[9px] font-bold shrink-0", nameToColor(String(row[col])))}>
-                                      {nameInitials(String(row[col]))}
-                                    </span>
-                                    <span>{String(row[col])}</span>
-                                  </div>
-                                ) : formatCell(col, row[col])}
-                              </td>
+                              <th key={col} onClick={() => toggleSort(col)}
+                                className={cn("px-3 py-2 font-medium select-none cursor-pointer group",
+                                  "hover:bg-gray-100 transition-colors whitespace-nowrap",
+                                  isNumericCol(col, firstRow[col]) ? "text-right" : "text-left")}>
+                                <div className={cn("flex items-center gap-1.5",
+                                  isNumericCol(col, firstRow[col]) ? "flex-row-reverse" : "flex-row")}>
+                                  <ColIcon col={col} sample={firstRow[col]} />
+                                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                                    {col.replace(/_/g, "_")}
+                                  </span>
+                                  <span className="opacity-0 group-hover:opacity-100 ml-auto">
+                                    {sortCol === col
+                                      ? sortDir === "asc"
+                                        ? <ChevronUp className="w-3 h-3 text-[#29B5E8]" />
+                                        : <ChevronDown className="w-3 h-3 text-[#29B5E8]" />
+                                      : <ChevronUp className="w-3 h-3 text-gray-300" />}
+                                  </span>
+                                </div>
+                              </th>
                             ))}
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="p-5">
-                    <SQLWorksheet sql={activeResult.sql} />
-                  </div>
-                )}
-              </div>
-
-              {/* ── Pagination footer ── */}
-              <div className="flex items-center justify-between px-4 py-1.5 border-t border-gray-200 bg-[#F8F9FA] shrink-0">
-                <p className="text-[10px] text-gray-400 font-mono">
-                  Rows {sortedRows.length > 0 ? (page - 1) * PER_PAGE + 1 : 0}–{Math.min(page * PER_PAGE, sortedRows.length)} of {sortedRows.length}
-                </p>
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-0.5">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                      className="px-2 py-1 text-[10px] border border-gray-200 rounded-l hover:bg-white disabled:opacity-30 text-gray-500 font-mono">
-                      ‹ Prev
-                    </button>
-                    {pageNums.map((p, i) =>
-                      p === null
-                        ? <span key={`e${i}`} className="w-6 text-center text-[10px] text-gray-300">…</span>
-                        : <button key={p} onClick={() => setPage(p)}
-                            className={cn("w-7 h-[26px] text-[10px] border-y border-r font-mono transition-colors",
-                              page === p ? "bg-[#29B5E8] border-[#29B5E8] text-white" : "border-gray-200 text-gray-500 hover:bg-white")}>
-                            {p}
-                          </button>
+                        </thead>
+                        <tbody>
+                          {pageRows.map((row, i) => {
+                            const globalNum = (page - 1) * PER_PAGE + i + 1;
+                            return (
+                              <tr key={i} className="border-b border-gray-100 hover:bg-[#EEF6FB] transition-colors">
+                                <td className="px-2 py-1.5 text-right text-[10px] text-gray-300 font-mono border-r border-gray-100 select-none w-10">
+                                  {globalNum}
+                                </td>
+                                {activeResult.columns.map(col => (
+                                  <td key={col} className={cn(
+                                    "px-3 py-1.5 font-mono text-[11px] text-gray-800 whitespace-nowrap",
+                                    isNumericCol(col, firstRow[col]) ? "text-right tabular-nums" : "text-left"
+                                  )}>
+                                    {(col === "customer_name" || col === "name") ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={cn("inline-flex items-center justify-center w-5 h-5 rounded text-white text-[9px] font-bold shrink-0", nameToColor(String(row[col])))}>
+                                          {nameInitials(String(row[col]))}
+                                        </span>
+                                        <span>{String(row[col])}</span>
+                                      </div>
+                                    ) : formatCell(col, row[col])}
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="p-5">
+                        <SQLWorksheet sql={activeResult.sql} />
+                      </div>
                     )}
-                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                      className="px-2 py-1 text-[10px] border border-gray-200 border-l-0 rounded-r hover:bg-white disabled:opacity-30 text-gray-500 font-mono">
-                      Next ›
-                    </button>
                   </div>
-                )}
-              </div>
+
+                  {/* ── Pagination footer ── */}
+                  <div className="flex items-center justify-between px-4 py-1.5 border-t border-gray-200 bg-[#F8F9FA] shrink-0">
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      Rows {sortedRows.length > 0 ? (page - 1) * PER_PAGE + 1 : 0}–{Math.min(page * PER_PAGE, sortedRows.length)} of {sortedRows.length}
+                    </p>
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                          className="px-2 py-1 text-[10px] border border-gray-200 rounded-l hover:bg-white disabled:opacity-30 text-gray-500 font-mono">
+                          ‹ Prev
+                        </button>
+                        {pageNums.map((p, i) =>
+                          p === null
+                            ? <span key={`e${i}`} className="w-6 text-center text-[10px] text-gray-300">…</span>
+                            : <button key={p} onClick={() => setPage(p)}
+                                className={cn("w-7 h-[26px] text-[10px] border-y border-r font-mono transition-colors",
+                                  page === p ? "bg-[#29B5E8] border-[#29B5E8] text-white" : "border-gray-200 text-gray-500 hover:bg-white")}>
+                                {p}
+                              </button>
+                        )}
+                        <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                          className="px-2 py-1 text-[10px] border border-gray-200 border-l-0 rounded-r hover:bg-white disabled:opacity-30 text-gray-500 font-mono">
+                          Next ›
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
